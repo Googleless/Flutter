@@ -23,12 +23,13 @@ class ToDo {
     };
   }
 
-    factory ToDo.fromJson(Map<String, dynamic> json) {
+  // Используем наш кастомный парсер для работы с датой
+  factory ToDo.fromJson(Map<String, dynamic> json) {
     return ToDo(
       id: json['id'],
       title: json['title'],
       text: json['text'],
-      dueDate: DateTime.parse(json['dueDate']),
+      dueDate: DateTimeParser.parse(json['dueDate']),
     );
   }
 
@@ -94,6 +95,49 @@ class ToDoList {
   }
 }
 
+class DateTimeParser {
+  // Стандартное regex, который мы уже использовали
+  static final RegExp _isoFormat = RegExp(
+      r'^(\d{4})-(\d{2})-(\d{2})(?:[T\s](\d{2}):(\d{2})(?::(\d{2})(?:\.(\d+))?)?(Z|([+-])(\d{2})(?::?(\d{2}))?)?)?$');
+
+  // Regex для формата с точками, где год в начале: 2025.02.23
+  static final RegExp _dotFormatYearAtStart = RegExp(
+      r'^(\d{4})\.(\d{1,2})\.(\d{1,2})$');
+
+  // Regex для формата с точками, где год в конце: 23.02.2025
+  static final RegExp _dotFormatYearAtEnd = RegExp(
+      r'^(\d{1,2})\.(\d{1,2})\.(\d{4})$');
+
+  static DateTime parse(String formattedString) {
+    try {
+      // Сначала пробуем стандартный ISO формат
+      return DateTime.parse(formattedString);
+    } on FormatException {
+      // Пробуем формат с точками, где год в начале: 2025.02.23
+      Match? match = _dotFormatYearAtStart.firstMatch(formattedString);
+      if (match != null) {
+        int year = int.parse(match.group(1)!);
+        int month = int.parse(match.group(2)!);
+        int day = int.parse(match.group(3)!);
+        return DateTime(year, month, day);
+      }
+
+      // Пробуем формат с точками, где год в конце: 23.02.2025
+      match = _dotFormatYearAtEnd.firstMatch(formattedString);
+      if (match != null) {
+        int day = int.parse(match.group(1)!);
+        int month = int.parse(match.group(2)!);
+        int year = int.parse(match.group(3)!);
+        return DateTime(year, month, day);
+      }
+
+      // Если ни один вариант не подошёл – кидаем исключение
+      throw FormatException("Неверный формат даты", formattedString);
+    }
+  }
+}
+
+
 void main() {
   ToDoList todoList = ToDoList();
   const String filePath = 'todos.json';
@@ -114,14 +158,14 @@ void main() {
         String? title = stdin.readLineSync();
         stdout.write('Enter text: ');
         String? text = stdin.readLineSync();
-        
+
         stdout.write('Enter due date (YYYY-MM-DD) or press Enter for one week from now: ');
         String? dateInput = stdin.readLineSync();
 
         DateTime dueDate;
         if (dateInput != null && dateInput.isNotEmpty) {
           try {
-            dueDate = DateTime.parse(dateInput);
+            dueDate = DateTimeParser.parse(dateInput);
           } catch (e) {
             print('Invalid date format. Setting due date to one week from now.');
             dueDate = DateTime.now().add(Duration(days: 7));
